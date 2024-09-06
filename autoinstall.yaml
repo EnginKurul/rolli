@@ -1,0 +1,70 @@
+# autoinstall configuration
+version: 1
+identity:
+  hostname: ubuntu
+  username: adminuser   # Erstelle einen temporären Admin-Benutzer für die Installation
+  password: $6$hash     # Verschlüsseltes Passwort, kann durch `mkpasswd` generiert werden
+locale: en_US
+keyboard:
+  layout: us
+  variant: ""
+
+network:
+  version: 2
+  ethernets:
+    enp0s3:
+      dhcp4: true
+
+storage:
+  layout:
+    name: lvm
+  swap:
+    size: 4096
+  encrypted: true        # Festplattenverschlüsselung aktivieren
+  passphrase: "strong_password"
+
+autoinstall:
+  version: 1
+  interactive-sections: []
+
+  # Benutzerdefinierte Pakete installieren
+  packages:
+    - google-chrome-stable
+    - intellij-idea-community
+    - keepassxc
+    - docker.io
+    - postman
+    - apt-transport-https
+    - software-properties-common
+
+  # Office 365 und Teams Installation
+  late-commands:
+    - curtin in-target -- /usr/bin/bash -c "wget -q https://packages.microsoft.com/keys/microsoft.asc -O- | apt-key add -"
+    - curtin in-target -- /usr/bin/bash -c "add-apt-repository \"$(wget -qO- https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list)\""
+    - curtin in-target -- apt-get update
+    - curtin in-target -- apt-get install -y microsoft-edge-stable
+    - curtin in-target -- apt-get install -y teams
+    - curtin in-target -- apt-get install -y libreoffice
+
+  # Active Directory Integration (Domain: eggs.local)
+  user-data:
+    runcmd:
+      - apt install -y realmd sssd sssd-tools adcli
+      - realm join --user=Administrator eggs.local
+      - sed -i 's/use_fully_qualified_names = True/use_fully_qualified_names = False/g' /etc/sssd/sssd.conf
+      - systemctl restart sssd
+
+  # Docker Einrichtung
+  late-commands:
+    - curtin in-target -- /usr/bin/bash -c "usermod -aG docker adminuser"
+    - curtin in-target -- /usr/bin/bash -c "systemctl enable docker"
+    
+  # Finale Schritte nach der Installation
+  user-data:
+    late-commands:
+      - curtin in-target -- /usr/bin/bash -c "snap install intellij-idea-community --classic"
+      - curtin in-target -- /usr/bin/bash -c "snap install postman"
+      - curtin in-target -- /usr/bin/bash -c "snap install keepassxc"
+
+  # Reboot nach der Installation
+  reboot: true
